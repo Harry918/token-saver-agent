@@ -2,7 +2,8 @@ from pathlib import Path
 
 from token_saver.config import Settings
 from token_saver.orchestrator import Orchestrator
-from token_saver.types import ModelResult, Task, TaskType, Tier
+from token_saver.store import RunStore
+from token_saver.types import ModelResult, Risk, Task, TaskType, Tier
 
 
 class FakeProvider:
@@ -13,7 +14,7 @@ class FakeProvider:
 
     def run(self, task, messages, model):
         self.calls += 1
-        return ModelResult(next(self.responses), self.name, model)
+        return ModelResult(next(self.responses), self.name, model, 10, 5)
 
 
 class FailingProvider:
@@ -36,6 +37,9 @@ def test_local_success_does_not_escalate(tmp_path: Path) -> None:
     assert result.decision.tier == Tier.LOCAL
     assert not result.escalated
     assert codex.calls == 0
+    assert result.usage.local_work_percent == 100
+    assert result.usage.codex_work_percent == 0
+    assert result.usage.estimated_gpt_token_savings_percent == 100
 
 
 def test_local_failure_retries_then_escalates(tmp_path: Path) -> None:
@@ -50,6 +54,10 @@ def test_local_failure_retries_then_escalates(tmp_path: Path) -> None:
     assert local.calls == 2
     assert codex.calls == 1
     assert result.result.text == "Resolved"
+    assert result.usage.local_calls == 2
+    assert result.usage.codex_calls == 1
+    assert result.usage.local_work_percent == 66.67
+    assert result.usage.codex_work_percent == 33.33
 
 
 def test_local_coding_result_edits_workspace(tmp_path: Path) -> None:
@@ -76,3 +84,30 @@ def test_local_provider_error_escalates_to_codex(tmp_path: Path) -> None:
     assert result.escalated
     assert result.result.text == "Cloud fallback"
     assert codex.calls == 1
+
+
+def test_high_risk_still_routes_directly_to_codex(tmp_path: Path) -> None:
+    local = FakeProvider(["local should not run"], "local")
+    codex = FakeProvider(["Cloud direct"], "codex")
+
+    result = Orchestrator(settings(tmp_path), local, codex).run(
+        Task("Change production authentication", risk=Risk.HIGH)
+    )
+
+    assert result.decision.tier == Tier.CODEX
+    assert local.calls == 0
+    assert codex.calls == 1
+    assert result.usage.local_work_percent == 0
+    assert result.usage.codex_work_percent == 100
+
+
+def test_store_stats_aggregates_usage(tmp_path: Path) -> None:
+    local = FakeProvider(["Done"], "local")
+    codex = FakeProvider(["Cloud done"], "codex")
+    Orchestrator(settings(tmp_path), local, codex).run(Task("Summarize this"))
+
+    stats = RunStore(tmp_path / "runs.sqlite3").stats()
+
+    assert stats["local_calls"] == 1
+    assert stats["codex_calls"] == 0
+    assert stats["estimated_gpt_token_savings_percent"] == 100

@@ -42,13 +42,6 @@ class PolicyRouter:
             f"expected_files={task.expected_files}",
             f"risk={task.risk}",
         ]
-        if score <= 4:
-            tier = Tier.LOCAL
-        elif score <= 8:
-            tier = Tier.LOCAL
-            reasons.append("local-first with verification and escalation")
-        elif score <= 12:
-            tier = Tier.CODEX_MINI
-        else:
-            tier = Tier.CODEX
+        tier = Tier.LOCAL
+        reasons.append("local-first; Codex only after verification failure")
         return RouteDecision(tier, score, reasons)

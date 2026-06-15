@@ -71,9 +71,48 @@ class VerificationResult:
 
 
 @dataclass(slots=True)
+class RunUsage:
+    local_calls: int = 0
+    codex_calls: int = 0
+    local_tokens: int = 0
+    codex_tokens: int = 0
+    estimated_gpt_token_savings_percent: float = 0.0
+
+    @property
+    def total_calls(self) -> int:
+        return self.local_calls + self.codex_calls
+
+    @property
+    def local_work_percent(self) -> float:
+        if self.total_calls == 0:
+            return 0.0
+        return round(100 * self.local_calls / self.total_calls, 2)
+
+    @property
+    def codex_work_percent(self) -> float:
+        if self.total_calls == 0:
+            return 0.0
+        return round(100 * self.codex_calls / self.total_calls, 2)
+
+    def to_dict(self) -> dict[str, int | float]:
+        return {
+            "local_calls": self.local_calls,
+            "codex_calls": self.codex_calls,
+            "local_tokens": self.local_tokens,
+            "codex_tokens": self.codex_tokens,
+            "local_work_percent": self.local_work_percent,
+            "codex_work_percent": self.codex_work_percent,
+            "estimated_gpt_token_savings_percent": round(
+                self.estimated_gpt_token_savings_percent, 2
+            ),
+        }
+
+
+@dataclass(slots=True)
 class RunResult:
     task_id: str
     decision: RouteDecision
     result: ModelResult
     verification: VerificationResult
     escalated: bool = False
+    usage: RunUsage = field(default_factory=RunUsage)

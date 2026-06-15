@@ -14,11 +14,11 @@ CLI -> policy router -> Headroom -> local llama.cpp model
                      -> local SQLite history
 ```
 
-- Low-complexity work runs locally without cloud-model tokens.
+- Work routes local-first by default to avoid cloud-model tokens.
 - Local coding responses are validated and applied as structured file operations.
 - Verification commands determine whether coding work passes.
 - Failed local attempts are summarized and escalated to Codex.
-- High-risk, research, or complex tasks can route directly to Codex.
+- High-risk or research tasks can route directly to Codex.
 - Allowed project roots are configured on first use.
 
 ## Requirements
@@ -146,6 +146,12 @@ Inspect local run history:
 token-saver history
 ```
 
+Include recent local-vs-Codex usage and estimated GPT token savings:
+
+```bash
+token-saver history --stats
+```
+
 By default, history is stored outside the repository at
 `~/.local/state/token-saver/tasks.sqlite3`. It may contain prompts, paths, and model responses. Do not
 publish it.
@@ -242,16 +248,23 @@ provider. Keep `allowed_origins` pinned to your exact Pages origin, for example
 
 ## Routing
 
-The router scores subsystem count, expected files, ambiguity, tool depth, novelty, and risk:
+The router scores subsystem count, expected files, ambiguity, tool depth, novelty, and risk, but size
+alone does not spend GPT tokens. Non-high-risk work starts on the local model, then verification and
+retry decide whether Codex is needed.
 
 | Score or condition | Route |
 | --- | --- |
-| 0-8 | Local model, then verification and possible escalation |
-| 9-12 | Smaller Codex model |
-| Above 12 | Frontier Codex model |
+| Normal coding/general/operations task | Local model, then verification and possible escalation |
 | Research or high-risk terms | Frontier Codex model |
 
 Routing policy lives in `src/token_saver/router.py` and is intentionally deterministic.
+
+Each run reports:
+
+- `% local work`: share of model calls handled locally.
+- `% GPT work`: share of model calls handled by Codex.
+- Estimated GPT token savings: based on token counts when providers return usage, otherwise estimated
+  from local-vs-Codex call share.
 
 ## Local editing safety
 

@@ -251,6 +251,7 @@ def make_handler(server: ApiServer) -> type[BaseHTTPRequestHandler]:
                     "escalated": outcome.escalated,
                     "verification": outcome.verification.reason,
                     "changed_files": outcome.result.changed_files,
+                    "usage": outcome.usage.to_dict(),
                 }
                 if outcome.verification.passed and deploy:
                     deployment = BackendDeployer(

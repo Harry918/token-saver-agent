@@ -7,9 +7,11 @@ def test_small_task_routes_local() -> None:
     assert decision.tier == Tier.LOCAL
 
 
-def test_medium_task_routes_mini() -> None:
+def test_medium_task_still_routes_local_first() -> None:
     task = Task("Refactor parser", expected_files=3, subsystems=2)
-    assert PolicyRouter().route(task).tier == Tier.CODEX_MINI
+    decision = PolicyRouter().route(task)
+    assert decision.tier == Tier.LOCAL
+    assert "local-first" in decision.reasons[-1]
 
 
 def test_high_risk_task_routes_frontier() -> None:

@@ -219,6 +219,10 @@ class TelegramBot:
             f"Provider: {outcome.result.provider} ({outcome.result.model})\n"
             f"Verified: {outcome.verification.passed}\n"
             f"Escalated: {outcome.escalated}\n"
+            f"Local/GPT split: {outcome.usage.local_work_percent}% / "
+            f"{outcome.usage.codex_work_percent}%\n"
+            f"Estimated GPT token savings: "
+            f"{outcome.usage.estimated_gpt_token_savings_percent:.2f}%\n"
             f"Changed files: {changed}"
         )
 
@@ -255,6 +259,10 @@ class TelegramBot:
             f"{deploy_line}\n"
             f"Provider: {outcome.result.provider}\n"
             f"Escalated: {outcome.escalated}\n"
+            f"Local/GPT split: {outcome.usage.local_work_percent}% / "
+            f"{outcome.usage.codex_work_percent}%\n"
+            f"Estimated GPT token savings: "
+            f"{outcome.usage.estimated_gpt_token_savings_percent:.2f}%\n"
             f"Changed files: {changed}"
         )
 

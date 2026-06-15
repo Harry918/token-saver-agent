@@ -7,7 +7,15 @@ from .prompts import build_escalation_messages, build_messages
 from .providers import CodexProvider, LlamaCppProvider, Provider
 from .router import PolicyRouter
 from .store import RunStore
-from .types import ModelResult, RunResult, Task, TaskType, Tier, VerificationResult
+from .types import (
+    ModelResult,
+    RunResult,
+    RunUsage,
+    Task,
+    TaskType,
+    Tier,
+    VerificationResult,
+)
 from .verifier import Verifier
 
 
@@ -31,9 +39,10 @@ class Orchestrator:
         task.workspace = str(self.settings.validate_workspace(task.workspace))
         decision = self.router.route(task)
         escalated = False
+        usage = RunUsage()
 
         if decision.tier == Tier.LOCAL:
-            result, verification = self._run_local(task)
+            result, verification = self._run_local(task, usage)
 
             attempts = 1
             while (
@@ -51,6 +60,7 @@ class Orchestrator:
                     result = self.local.run(
                         task, compressed.messages, self.settings.local_model
                     )
+                    self._record_usage(usage, result, is_codex=False)
                     self._apply_local_edits(task, result)
                     verification = self.verifier.verify(task, result)
                 except RuntimeError as exc:
@@ -73,6 +83,7 @@ class Orchestrator:
                 result = self.codex.run(
                     task, compressed.messages, self.settings.codex_model
                 )
+                self._record_usage(usage, result, is_codex=True)
                 verification = self.verifier.verify(task, result)
         else:
             model = (
@@ -83,18 +94,23 @@ class Orchestrator:
             messages = build_messages(task)
             compressed = self.compressor.compress(messages, model)
             result = self.codex.run(task, compressed.messages, model)
+            self._record_usage(usage, result, is_codex=True)
             verification = self.verifier.verify(task, result)
 
-        self.store.save(task, decision, result, verification, escalated)
-        return RunResult(task.task_id, decision, result, verification, escalated)
+        usage.estimated_gpt_token_savings_percent = self._estimate_savings(usage)
+        self.store.save(task, decision, result, verification, escalated, usage)
+        return RunResult(task.task_id, decision, result, verification, escalated, usage)
 
-    def _run_local(self, task: Task) -> tuple[ModelResult, VerificationResult]:
+    def _run_local(
+        self, task: Task, usage: RunUsage
+    ) -> tuple[ModelResult, VerificationResult]:
         messages = build_messages(task)
         compressed = self.compressor.compress(messages, self.settings.local_model)
         try:
             result = self.local.run(
                 task, compressed.messages, self.settings.local_model
             )
+            self._record_usage(usage, result, is_codex=False)
         except RuntimeError as exc:
             result = ModelResult(
                 text="", provider="local-error", model=self.settings.local_model
@@ -113,3 +129,23 @@ class Orchestrator:
         result.edit_error = edit.error
         if not edit.error:
             result.text = edit.summary
+
+    @staticmethod
+    def _record_usage(usage: RunUsage, result: ModelResult, is_codex: bool) -> None:
+        tokens = (result.input_tokens or 0) + (result.output_tokens or 0)
+        if is_codex:
+            usage.codex_calls += 1
+            usage.codex_tokens += tokens
+        else:
+            usage.local_calls += 1
+            usage.local_tokens += tokens
+
+    @staticmethod
+    def _estimate_savings(usage: RunUsage) -> float:
+        total_tokens = usage.local_tokens + usage.codex_tokens
+        if total_tokens > 0:
+            return 100 * usage.local_tokens / total_tokens
+        total_calls = usage.local_calls + usage.codex_calls
+        if total_calls == 0:
+            return 0.0
+        return 100 * usage.local_calls / total_calls

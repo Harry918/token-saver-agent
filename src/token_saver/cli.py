@@ -4,8 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-from .config import Settings, config_path, interactive_setup, load_config, write_config
 from .api import run_api_server
+from .config import Settings, config_path, interactive_setup, load_config, write_config
 from .deploy import BackendDeployer, BackendSettings, build_backend_task
 from .orchestrator import Orchestrator
 from .router import PolicyRouter
@@ -55,6 +55,11 @@ def main() -> None:
     _add_task_args(run_parser)
     history_parser = subparsers.add_parser("history", help="Show recent runs")
     history_parser.add_argument("--limit", type=int, default=20)
+    history_parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Include local-vs-Codex usage and estimated GPT token savings",
+    )
     init_parser = subparsers.add_parser("init", help="Configure allowed project roots")
     init_parser.add_argument(
         "--project-root",
@@ -116,7 +121,13 @@ def main() -> None:
             parser.error(str(exc))
         return
     if args.command == "history":
-        print(json.dumps(RunStore(settings.db_path).recent(args.limit), indent=2))
+        store = RunStore(settings.db_path)
+        response = (
+            {"runs": store.recent(args.limit), "stats": store.stats(args.limit)}
+            if args.stats
+            else store.recent(args.limit)
+        )
+        print(json.dumps(response, indent=2))
         return
 
     if args.command == "backend":
@@ -131,6 +142,7 @@ def main() -> None:
             "provider": outcome.result.provider,
             "escalated": outcome.escalated,
             "changed_files": outcome.result.changed_files,
+            "usage": outcome.usage.to_dict(),
         }
         if outcome.verification.passed and not args.no_deploy:
             deployment = BackendDeployer(
@@ -175,6 +187,7 @@ def main() -> None:
                 "verification": outcome.verification.reason,
                 "escalated": outcome.escalated,
                 "changed_files": outcome.result.changed_files,
+                "usage": outcome.usage.to_dict(),
             },
             indent=2,
         )
