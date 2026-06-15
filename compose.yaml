@@ -1,0 +1,23 @@
+services:
+  telegram-agent:
+    build:
+      context: .
+    image: token-saver-agent:local
+    init: true
+    restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HOME: /home/token-saver
+      TOKEN_SAVER_CONFIG: /config/config.toml
+      TOKEN_SAVER_DB: /state/tasks.sqlite3
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      TOKEN_SAVER_LOCAL_URL: http://host.docker.internal:8080/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${PROJECTS_ROOT:?Set PROJECTS_ROOT}:${PROJECTS_ROOT:?Set PROJECTS_ROOT}"
+      - "${TOKEN_SAVER_CONFIG_FILE:?Set TOKEN_SAVER_CONFIG_FILE}:/config/config.toml:ro"
+      - "${TOKEN_SAVER_STATE_DIR:?Set TOKEN_SAVER_STATE_DIR}:/state"
+      - "${TELEGRAM_TOKEN_FILE:?Set TELEGRAM_TOKEN_FILE}:/run/secrets/telegram_bot_token:ro"
+      - "${CODEX_HOME_DIR:?Set CODEX_HOME_DIR}:/home/token-saver/.codex"
+    stop_grace_period: 20s

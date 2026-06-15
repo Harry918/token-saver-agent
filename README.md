@@ -227,6 +227,62 @@ Supported private-chat commands:
 Telegram users cannot provide arbitrary workspace paths or shell verification commands. Group chats are
 rejected, and only explicitly allowed numeric user IDs may execute tasks.
 
+### Always-on Docker deployment
+
+Docker Compose can keep the Telegram bridge running and restart it after crashes or Docker Desktop
+restarts. llama.cpp continues running on the host and is reached through `host.docker.internal`.
+
+Copy the example deployment environment and replace each path with an absolute host path:
+
+```bash
+cp docker.env.example .env.docker
+```
+
+Example values on Linux or macOS:
+
+```dotenv
+PROJECTS_ROOT=/absolute/path/to/projects
+TOKEN_SAVER_CONFIG_FILE=/absolute/path/to/config.toml
+TOKEN_SAVER_STATE_DIR=/absolute/path/to/state-directory
+TELEGRAM_TOKEN_FILE=/absolute/path/to/telegram-token
+CODEX_HOME_DIR=/absolute/path/to/.codex
+HOST_UID=1000
+HOST_GID=1000
+```
+
+The paths inside `config.toml` must match the mounted host paths exactly. For example, if
+`PROJECTS_ROOT=/home/alice/projects`, Telegram project aliases must also start with
+`/home/alice/projects`.
+
+Start the service:
+
+```bash
+docker compose --env-file .env.docker up -d --build
+```
+
+Inspect status and logs:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f telegram-agent
+```
+
+Apply new configuration or code:
+
+```bash
+docker compose --env-file .env.docker up -d --build --force-recreate
+```
+
+Stop the service:
+
+```bash
+docker compose --env-file .env.docker down
+```
+
+The container mounts the configured project root and Codex home directory because agents need access to
+projects and Codex authentication. Do not run untrusted prompts or expose the bot beyond the private
+allowlist. Project-specific verification tools may require additional packages in the `Dockerfile`.
+
 ## Development
 
 ```bash
