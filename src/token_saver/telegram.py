@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import Settings, load_config
+from .deploy import BackendDeployer, BackendSettings, build_backend_task
 from .orchestrator import Orchestrator
 from .types import Risk, Task, TaskType
 
@@ -186,6 +187,8 @@ class TelegramBot:
             return self._run_task(user_id, chat_id, text[5:].strip(), TaskType.GENERAL)
         if text.startswith("/code "):
             return self._run_task(user_id, chat_id, text[6:].strip(), TaskType.CODING)
+        if text.startswith("/backend "):
+            return self._run_backend(chat_id, text[9:].strip())
         return self.help_text()
 
     def _run_task(
@@ -222,6 +225,39 @@ class TelegramBot:
     def _selected_alias(self, user_id: int) -> str:
         return self.selected_projects.get(user_id, sorted(self.telegram.projects)[0])
 
+    def _run_backend(self, chat_id: int, body: str) -> str:
+        slug, _, objective = body.partition(" ")
+        if not slug or not objective:
+            return "Usage: /backend <slug> <what to build>"
+        backend = BackendSettings.from_config(self.settings)
+        self.client.send_typing(chat_id)
+        task = build_backend_task(slug, objective, backend)
+        outcome = self.orchestrator.run(task)
+        if not outcome.verification.passed:
+            return (
+                f"Backend generation failed for {slug}.\n"
+                f"Verification: {outcome.verification.reason}"
+            )
+        try:
+            deployment = BackendDeployer(
+                backend.apps_root,
+                backend.port_start,
+                backend.port_end,
+                backend.host,
+            ).deploy(slug)
+            deploy_line = f"URL: {deployment.url}"
+        except Exception as exc:
+            deploy_line = f"Generated but not deployed: {exc}"
+        changed = ", ".join(outcome.result.changed_files) or "none"
+        return (
+            f"Backend app: {slug}\n"
+            f"Workspace: {task.workspace}\n"
+            f"{deploy_line}\n"
+            f"Provider: {outcome.result.provider}\n"
+            f"Escalated: {outcome.escalated}\n"
+            f"Changed files: {changed}"
+        )
+
     @staticmethod
     def help_text() -> str:
         return (
@@ -230,7 +266,8 @@ class TelegramBot:
             "/projects - list configured project aliases\n"
             "/use <alias> - select a project\n"
             "/ask <task> - run a general task\n"
-            "/code <task> - run a coding task in the selected project"
+            "/code <task> - run a coding task in the selected project\n"
+            "/backend <slug> <task> - generate and deploy a Dockerized backend app"
         )
 
 

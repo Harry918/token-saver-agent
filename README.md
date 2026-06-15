@@ -150,6 +150,41 @@ By default, history is stored outside the repository at
 `~/.local/state/token-saver/tasks.sqlite3`. It may contain prompts, paths, and model responses. Do not
 publish it.
 
+## Backend apps
+
+For private workflows, Token Saver can generate a small Dockerized backend app and deploy it on your
+own Docker host. Generated apps live under the configured backend root, not inside this repository.
+
+Add a backend section to `~/.config/token-saver/config.toml`:
+
+```toml
+[backend]
+apps_root = "/absolute/path/to/projects/generated-backends"
+port_start = 8500
+port_end = 8999
+host = "127.0.0.1"
+```
+
+Generate, verify, and deploy a backend:
+
+```bash
+token-saver backend hello-api build a tiny JSON API with /health and /time
+```
+
+The command creates `/absolute/path/to/projects/generated-backends/hello-api`, validates that the app
+has a `Dockerfile` and `compose.yaml`, allocates a stable host port, then runs Docker Compose. The JSON
+response includes the URL, for example `http://127.0.0.1:8500`.
+
+Generate files without starting a container:
+
+```bash
+token-saver backend hello-api build a tiny JSON API --no-deploy
+```
+
+Generated `compose.yaml` files must use `${TOKEN_SAVER_BACKEND_PORT:-8500}` for the host port. The
+deployer rejects privileged containers, host networking, host pid/ipc, and Docker socket mounts in
+generated backend apps.
+
 ## Routing
 
 The router scores subsystem count, expected files, ambiguity, tool depth, novelty, and risk:
@@ -223,6 +258,7 @@ Supported private-chat commands:
 - `/use <alias>` selects a project.
 - `/ask <task>` runs a general task.
 - `/code <task>` runs a coding task using the configured verification command.
+- `/backend <slug> <task>` generates and deploys a Dockerized backend app.
 
 Telegram users cannot provide arbitrary workspace paths or shell verification commands. Group chats are
 rejected, and only explicitly allowed numeric user IDs may execute tasks.
@@ -282,6 +318,26 @@ docker compose --env-file .env.docker down
 The container mounts the configured project root and Codex home directory because agents need access to
 projects and Codex authentication. Do not run untrusted prompts or expose the bot beyond the private
 allowlist. Project-specific verification tools may require additional packages in the `Dockerfile`.
+
+### Docker backend control
+
+Backend deployment from inside the Dockerized Telegram bridge is opt-in. It mounts the host Docker
+socket so the bot can run `docker compose` for generated backend apps:
+
+```bash
+docker compose \
+  --env-file .env.docker \
+  -f compose.yaml \
+  -f compose.docker-control.yaml \
+  up -d --build
+```
+
+Set `DOCKER_SOCKET_PATH` in `.env.docker` to your host socket. Common values are
+`/var/run/docker.sock` on Linux and `$HOME/.docker/run/docker.sock` on Docker Desktop for macOS.
+
+Docker socket access is equivalent to control over the host Docker daemon. Use it only for your own
+private bot, keep the Telegram allowlist tight, and rotate the bot token if it was pasted into chat or
+logs.
 
 ## Development
 

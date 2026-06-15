@@ -12,6 +12,12 @@ max_local_attempts = 2
 headroom_enabled = true
 request_timeout = 180
 
+[backend]
+apps_root = "/absolute/path/to/your/projects/generated-backends"
+port_start = 8500
+port_end = 8999
+host = "127.0.0.1"
+
 [telegram]
 allowed_user_ids = [123456789]
 poll_timeout = 30

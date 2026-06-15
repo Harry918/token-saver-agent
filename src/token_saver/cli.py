@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import Settings, config_path, interactive_setup, load_config, write_config
+from .deploy import BackendDeployer, BackendSettings, build_backend_task
 from .orchestrator import Orchestrator
 from .router import PolicyRouter
 from .store import RunStore
@@ -61,6 +62,16 @@ def main() -> None:
     )
     subparsers.add_parser("config", help="Show configuration path and allowed roots")
     subparsers.add_parser("telegram", help="Run the private Telegram bot bridge")
+    backend_parser = subparsers.add_parser(
+        "backend", help="Generate and optionally deploy a Dockerized backend app"
+    )
+    backend_parser.add_argument("slug")
+    backend_parser.add_argument("objective", nargs="+")
+    backend_parser.add_argument(
+        "--no-deploy",
+        action="store_true",
+        help="Generate and verify files, but do not run docker compose",
+    )
     args = parser.parse_args()
 
     if args.command == "init":
@@ -98,6 +109,33 @@ def main() -> None:
         return
     if args.command == "history":
         print(json.dumps(RunStore(settings.db_path).recent(args.limit), indent=2))
+        return
+
+    if args.command == "backend":
+        backend = BackendSettings.from_config(settings)
+        objective = " ".join(args.objective)
+        task = build_backend_task(args.slug, objective, backend)
+        outcome = Orchestrator(settings).run(task)
+        response = {
+            "slug": args.slug,
+            "workspace": task.workspace,
+            "generated": outcome.verification.passed,
+            "provider": outcome.result.provider,
+            "escalated": outcome.escalated,
+            "changed_files": outcome.result.changed_files,
+        }
+        if outcome.verification.passed and not args.no_deploy:
+            deployment = BackendDeployer(
+                backend.apps_root,
+                backend.port_start,
+                backend.port_end,
+                backend.host,
+            ).deploy(args.slug)
+            response["url"] = deployment.url
+            response["port"] = deployment.port
+        else:
+            response["verification"] = outcome.verification.reason
+        print(json.dumps(response, indent=2))
         return
 
     task = _task(args)
