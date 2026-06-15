@@ -100,11 +100,16 @@ class RunStore:
             codex_tokens += int(usage.get("codex_tokens") or 0)
         total_calls = local_calls + codex_calls
         total_tokens = local_tokens + codex_tokens
-        savings = (
-            100 * local_tokens / total_tokens
-            if total_tokens
-            else (100 * local_calls / total_calls if total_calls else 0.0)
-        )
+        if total_calls == 0:
+            savings = 0.0
+        elif codex_calls == 0:
+            savings = 100.0
+        elif local_calls == 0:
+            savings = 0.0
+        elif total_tokens and local_tokens > 0 and codex_tokens > 0:
+            savings = 100 * local_tokens / total_tokens
+        else:
+            savings = 100 * local_calls / total_calls
         return {
             "runs": len(runs),
             "local_calls": local_calls,

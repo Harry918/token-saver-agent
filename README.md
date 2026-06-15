@@ -97,7 +97,8 @@ llama-server \
   -hf yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q4_K_M \
   --host 127.0.0.1 \
   --port 8080 \
-  --ctx-size 16384
+  --ctx-size 8192 \
+  --reasoning off
 ```
 
 The first launch downloads several gigabytes of model weights. Adjust the quantization and context size
@@ -105,7 +106,12 @@ for your hardware. Confirm readiness with:
 
 ```bash
 curl http://127.0.0.1:8080/health
+token-saver local-check
 ```
+
+`--reasoning off` is important for Gemma 4 coder GGUFs. Without it, llama.cpp may return only
+`reasoning_content` and leave `message.content` empty, which makes local coding tasks fail verification
+and escalate to Codex.
 
 ## Use
 

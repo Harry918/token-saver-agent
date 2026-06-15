@@ -49,14 +49,63 @@ class LlamaCppProvider:
             raise RuntimeError(
                 f"Local llama.cpp server unavailable at {url}: {exc}"
             ) from exc
+        message = body["choices"][0]["message"]
+        content = message.get("content") or ""
+        if not content and message.get("reasoning_content"):
+            raise RuntimeError(
+                "llama.cpp returned only reasoning_content. Restart llama-server with "
+                "`--reasoning off` so Token Saver receives normal message.content."
+            )
         usage = body.get("usage", {})
         return ModelResult(
-            text=body["choices"][0]["message"]["content"],
+            text=content,
             provider="llama.cpp",
             model=model,
             input_tokens=usage.get("prompt_tokens"),
             output_tokens=usage.get("completion_tokens"),
         )
+
+
+def check_llama_cpp(settings: Settings) -> dict[str, object]:
+    base_url = settings.local_url.rstrip("/")
+    health_url = base_url.removesuffix("/v1") + "/health"
+    result: dict[str, object] = {
+        "local_url": settings.local_url,
+        "health_url": health_url,
+        "ok": False,
+    }
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(health_url), timeout=10
+        ) as response:
+            result["health_status"] = response.status
+            result["health_body"] = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError) as exc:
+        result["error"] = f"llama.cpp health check failed: {exc}"
+        return result
+
+    try:
+        probe = LlamaCppProvider(settings).run(
+            Task("Reply with exactly LOCAL_OK"),
+            [{"role": "user", "content": "Reply with exactly LOCAL_OK"}],
+            settings.local_model,
+        )
+    except RuntimeError as exc:
+        result["error"] = str(exc)
+        return result
+
+    result.update(
+        {
+            "ok": probe.text.strip() == "LOCAL_OK",
+            "probe_text": probe.text.strip(),
+            "model": probe.model,
+            "input_tokens": probe.input_tokens,
+            "output_tokens": probe.output_tokens,
+        }
+    )
+    if not result["ok"]:
+        result["error"] = "local model probe did not return LOCAL_OK"
+    return result
 
 
 class CodexProvider:

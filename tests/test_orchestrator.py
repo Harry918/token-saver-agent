@@ -3,7 +3,7 @@ from pathlib import Path
 from token_saver.config import Settings
 from token_saver.orchestrator import Orchestrator
 from token_saver.store import RunStore
-from token_saver.types import ModelResult, Risk, Task, TaskType, Tier
+from token_saver.types import ModelResult, Risk, RunUsage, Task, TaskType, Tier
 
 
 class FakeProvider:
@@ -58,6 +58,7 @@ def test_local_failure_retries_then_escalates(tmp_path: Path) -> None:
     assert result.usage.codex_calls == 1
     assert result.usage.local_work_percent == 66.67
     assert result.usage.codex_work_percent == 33.33
+    assert result.usage.estimated_gpt_token_savings_percent == 66.66666666666667
 
 
 def test_local_coding_result_edits_workspace(tmp_path: Path) -> None:
@@ -111,3 +112,9 @@ def test_store_stats_aggregates_usage(tmp_path: Path) -> None:
     assert stats["local_calls"] == 1
     assert stats["codex_calls"] == 0
     assert stats["estimated_gpt_token_savings_percent"] == 100
+
+
+def test_savings_falls_back_to_call_share_when_codex_tokens_are_missing() -> None:
+    usage = RunUsage(local_calls=2, codex_calls=1, local_tokens=700, codex_tokens=0)
+
+    assert Orchestrator._estimate_savings(usage) == 66.66666666666667

@@ -8,6 +8,7 @@ from .api import run_api_server
 from .config import Settings, config_path, interactive_setup, load_config, write_config
 from .deploy import BackendDeployer, BackendSettings, build_backend_task
 from .orchestrator import Orchestrator
+from .providers import check_llama_cpp
 from .router import PolicyRouter
 from .store import RunStore
 from .telegram import run_telegram_bot
@@ -67,6 +68,7 @@ def main() -> None:
         help="Allowed project root; repeat for multiple roots",
     )
     subparsers.add_parser("config", help="Show configuration path and allowed roots")
+    subparsers.add_parser("local-check", help="Check the configured local model server")
     subparsers.add_parser("telegram", help="Run the private Telegram bot bridge")
     subparsers.add_parser("api", help="Run the authenticated HTTP API for a web UI")
     backend_parser = subparsers.add_parser(
@@ -107,6 +109,9 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+    if args.command == "local-check":
+        print(json.dumps(check_llama_cpp(settings), indent=2))
         return
     if args.command == "telegram":
         try:

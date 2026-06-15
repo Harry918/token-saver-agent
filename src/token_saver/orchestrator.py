@@ -142,10 +142,16 @@ class Orchestrator:
 
     @staticmethod
     def _estimate_savings(usage: RunUsage) -> float:
-        total_tokens = usage.local_tokens + usage.codex_tokens
-        if total_tokens > 0:
-            return 100 * usage.local_tokens / total_tokens
         total_calls = usage.local_calls + usage.codex_calls
         if total_calls == 0:
             return 0.0
+        if usage.codex_calls == 0:
+            return 100.0
+        if usage.local_calls == 0:
+            return 0.0
+        total_tokens = usage.local_tokens + usage.codex_tokens
+        local_has_tokens = usage.local_tokens > 0
+        codex_has_tokens = usage.codex_tokens > 0
+        if total_tokens > 0 and local_has_tokens and codex_has_tokens:
+            return 100 * usage.local_tokens / total_tokens
         return 100 * usage.local_calls / total_calls
