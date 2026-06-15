@@ -185,6 +185,61 @@ Generated `compose.yaml` files must use `${TOKEN_SAVER_BACKEND_PORT:-8500}` for 
 deployer rejects privileged containers, host networking, host pid/ipc, and Docker socket mounts in
 generated backend apps.
 
+## Web API for GitHub Pages
+
+GitHub Pages can host a static UI, but all powerful actions must happen on your own backend. Token
+Saver includes a small authenticated HTTP API for that purpose. It is locked down by default:
+
+- `/health` is public.
+- `/api/*` requires `Authorization: Bearer <token>`.
+- Browser requests are accepted only from configured `allowed_origins`.
+- Request bodies are size-limited and must be JSON.
+- Requests are rate-limited per client IP.
+- The API never accepts arbitrary workspace paths or verification shell commands.
+- Backend deployment through the API is disabled unless `backend_deploy_enabled = true`.
+- Generated backend Compose files are checked for privileged mode, host networking, host pid/ipc, and
+  Docker socket mounts.
+
+Create a private API token outside the repository:
+
+```bash
+mkdir -p "$HOME/.config/token-saver"
+openssl rand -hex 32 > "$HOME/.config/token-saver/api-token"
+chmod 600 "$HOME/.config/token-saver/api-token"
+```
+
+Add API settings to `~/.config/token-saver/config.toml`:
+
+```toml
+[api]
+host = "127.0.0.1"
+port = 8787
+token_file = "/absolute/path/to/api-token"
+allowed_origins = ["https://yourname.github.io"]
+max_body_bytes = 32768
+rate_limit_per_minute = 20
+backend_deploy_enabled = false
+```
+
+Run locally:
+
+```bash
+token-saver api
+```
+
+Generate backend files from a UI or script without deploying:
+
+```bash
+curl -sS http://127.0.0.1:8787/api/backend \
+  -H "Authorization: Bearer $(cat "$HOME/.config/token-saver/api-token")" \
+  -H "Content-Type: application/json" \
+  -d '{"slug":"hello-api","objective":"build a tiny JSON API","deploy":false}'
+```
+
+For a public GitHub Pages UI, put the API behind HTTPS with a tunnel, reverse proxy, or hosting
+provider. Keep `allowed_origins` pinned to your exact Pages origin, for example
+`https://yourname.github.io`.
+
 ## Routing
 
 The router scores subsystem count, expected files, ambiguity, tool depth, novelty, and risk:
@@ -338,6 +393,36 @@ Set `DOCKER_SOCKET_PATH` in `.env.docker` to your host socket. Common values are
 Docker socket access is equivalent to control over the host Docker daemon. Use it only for your own
 private bot, keep the Telegram allowlist tight, and rotate the bot token if it was pasted into chat or
 logs.
+
+### Docker API service
+
+Run the authenticated API in Docker:
+
+```bash
+docker compose \
+  --env-file .env.docker \
+  -f compose.yaml \
+  -f compose.api.yaml \
+  up -d --build token-saver-api
+```
+
+By default `compose.api.yaml` publishes the API only on `127.0.0.1:8787`. Use a reverse proxy or tunnel
+for HTTPS instead of binding it directly to the public internet.
+
+To let the API deploy generated backend containers, set `backend_deploy_enabled = true` in config and
+start it with the Docker-control override:
+
+```bash
+docker compose \
+  --env-file .env.docker \
+  -f compose.yaml \
+  -f compose.api.yaml \
+  -f compose.api-docker-control.yaml \
+  up -d --build token-saver-api
+```
+
+This grants the API container host Docker control. Use it only with HTTPS, a strong API token, and a
+tight `allowed_origins` list.
 
 ## Development
 

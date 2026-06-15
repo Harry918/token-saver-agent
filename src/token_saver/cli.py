@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import Settings, config_path, interactive_setup, load_config, write_config
+from .api import run_api_server
 from .deploy import BackendDeployer, BackendSettings, build_backend_task
 from .orchestrator import Orchestrator
 from .router import PolicyRouter
@@ -62,6 +63,7 @@ def main() -> None:
     )
     subparsers.add_parser("config", help="Show configuration path and allowed roots")
     subparsers.add_parser("telegram", help="Run the private Telegram bot bridge")
+    subparsers.add_parser("api", help="Run the authenticated HTTP API for a web UI")
     backend_parser = subparsers.add_parser(
         "backend", help="Generate and optionally deploy a Dockerized backend app"
     )
@@ -104,6 +106,12 @@ def main() -> None:
     if args.command == "telegram":
         try:
             run_telegram_bot()
+        except RuntimeError as exc:
+            parser.error(str(exc))
+        return
+    if args.command == "api":
+        try:
+            run_api_server()
         except RuntimeError as exc:
             parser.error(str(exc))
         return

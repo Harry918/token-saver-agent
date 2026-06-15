@@ -1,0 +1,8 @@
+services:
+  token-saver-api:
+    # Opt in only for private, trusted deployments. Docker socket access lets
+    # this container control the host Docker daemon.
+    group_add:
+      - "0"
+    volumes:
+      - "${DOCKER_SOCKET_PATH:?Set DOCKER_SOCKET_PATH}:/var/run/docker.sock"
