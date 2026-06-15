@@ -16,6 +16,11 @@ class FakeProvider:
         return ModelResult(next(self.responses), self.name, model)
 
 
+class FailingProvider:
+    def run(self, task, messages, model):
+        raise RuntimeError("local provider timed out")
+
+
 def settings(tmp_path: Path, attempts: int = 2) -> Settings:
     return Settings(
         db_path=tmp_path / "runs.sqlite3",
@@ -59,3 +64,15 @@ def test_local_coding_result_edits_workspace(tmp_path: Path) -> None:
     assert result.result.changed_files == ["app.py"]
     assert result.result.text == "created app"
     assert not result.escalated
+
+
+def test_local_provider_error_escalates_to_codex(tmp_path: Path) -> None:
+    codex = FakeProvider(["Cloud fallback"], "codex")
+
+    result = Orchestrator(settings(tmp_path), FailingProvider(), codex).run(
+        Task("Create a small app")
+    )
+
+    assert result.escalated
+    assert result.result.text == "Cloud fallback"
+    assert codex.calls == 1

@@ -7,7 +7,7 @@ from .prompts import build_escalation_messages, build_messages
 from .providers import CodexProvider, LlamaCppProvider, Provider
 from .router import PolicyRouter
 from .store import RunStore
-from .types import RunResult, Task, TaskType, Tier
+from .types import ModelResult, RunResult, Task, TaskType, Tier, VerificationResult
 from .verifier import Verifier
 
 
@@ -33,17 +33,13 @@ class Orchestrator:
         escalated = False
 
         if decision.tier == Tier.LOCAL:
-            messages = build_messages(task)
-            compressed = self.compressor.compress(messages, self.settings.local_model)
-            result = self.local.run(
-                task, compressed.messages, self.settings.local_model
-            )
-            self._apply_local_edits(task, result)
-            verification = self.verifier.verify(task, result)
+            result, verification = self._run_local(task)
 
             attempts = 1
             while (
-                not verification.passed and attempts < self.settings.max_local_attempts
+                not verification.passed
+                and attempts < self.settings.max_local_attempts
+                and result.provider != "local-error"
             ):
                 messages = build_messages(
                     task, verification.reason + "\n" + verification.output
@@ -51,11 +47,19 @@ class Orchestrator:
                 compressed = self.compressor.compress(
                     messages, self.settings.local_model
                 )
-                result = self.local.run(
-                    task, compressed.messages, self.settings.local_model
-                )
-                self._apply_local_edits(task, result)
-                verification = self.verifier.verify(task, result)
+                try:
+                    result = self.local.run(
+                        task, compressed.messages, self.settings.local_model
+                    )
+                    self._apply_local_edits(task, result)
+                    verification = self.verifier.verify(task, result)
+                except RuntimeError as exc:
+                    result = ModelResult(
+                        text="",
+                        provider="local-error",
+                        model=self.settings.local_model,
+                    )
+                    verification = VerificationResult(False, str(exc))
                 attempts += 1
 
             if not verification.passed:
@@ -83,6 +87,21 @@ class Orchestrator:
 
         self.store.save(task, decision, result, verification, escalated)
         return RunResult(task.task_id, decision, result, verification, escalated)
+
+    def _run_local(self, task: Task) -> tuple[ModelResult, VerificationResult]:
+        messages = build_messages(task)
+        compressed = self.compressor.compress(messages, self.settings.local_model)
+        try:
+            result = self.local.run(
+                task, compressed.messages, self.settings.local_model
+            )
+        except RuntimeError as exc:
+            result = ModelResult(
+                text="", provider="local-error", model=self.settings.local_model
+            )
+            return result, VerificationResult(False, str(exc))
+        self._apply_local_edits(task, result)
+        return result, self.verifier.verify(task, result)
 
     def _apply_local_edits(self, task: Task, result) -> None:
         if task.task_type != TaskType.CODING or result.text.lstrip().upper().startswith(
