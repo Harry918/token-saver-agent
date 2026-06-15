@@ -8,6 +8,7 @@ from .config import Settings, config_path, interactive_setup, load_config, write
 from .orchestrator import Orchestrator
 from .router import PolicyRouter
 from .store import RunStore
+from .telegram import run_telegram_bot
 from .types import Risk, Task, TaskType
 
 
@@ -59,6 +60,7 @@ def main() -> None:
         help="Allowed project root; repeat for multiple roots",
     )
     subparsers.add_parser("config", help="Show configuration path and allowed roots")
+    subparsers.add_parser("telegram", help="Run the private Telegram bot bridge")
     args = parser.parse_args()
 
     if args.command == "init":
@@ -87,6 +89,12 @@ def main() -> None:
                 indent=2,
             )
         )
+        return
+    if args.command == "telegram":
+        try:
+            run_telegram_bot()
+        except RuntimeError as exc:
+            parser.error(str(exc))
         return
     if args.command == "history":
         print(json.dumps(RunStore(settings.db_path).recent(args.limit), indent=2))

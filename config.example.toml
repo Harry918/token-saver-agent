@@ -11,3 +11,9 @@ codex_mini_model = "gpt-5.4-mini"
 max_local_attempts = 2
 headroom_enabled = true
 request_timeout = 180
+
+[telegram]
+allowed_user_ids = [123456789]
+poll_timeout = 30
+projects = { agent = "/absolute/path/to/your/projects/token-saver-agent" }
+verify_commands = { agent = "python -m pytest -q" }

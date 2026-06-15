@@ -184,6 +184,49 @@ The repository contains no Codex credentials. The optional `openai-codex` SDK us
 authentication mechanism. Never commit credential files, API keys, model weights, or run-history
 databases.
 
+## Telegram bridge
+
+The optional Telegram bridge uses private long polling, so it does not require a public web server.
+Create a bot with Telegram's `@BotFather`, then keep the token outside this repository. A private token
+file avoids placing the credential in shell history:
+
+```bash
+mkdir -p "$HOME/.config/token-saver"
+printf '%s' "your-bot-token" > "$HOME/.config/token-saver/telegram-token"
+chmod 600 "$HOME/.config/token-saver/telegram-token"
+export TELEGRAM_BOT_TOKEN_FILE="$HOME/.config/token-saver/telegram-token"
+```
+
+For containers or service managers, `TELEGRAM_BOT_TOKEN` is also supported.
+
+Add a private allowlist and project aliases to `~/.config/token-saver/config.toml`:
+
+```toml
+[telegram]
+allowed_user_ids = [123456789]
+poll_timeout = 30
+projects = { agent = "/absolute/path/to/token-saver-agent" }
+verify_commands = { agent = "python -m pytest -q" }
+```
+
+If you do not know your numeric Telegram user ID, start the bot with an empty allowlist and send
+`/whoami`. The bot will reveal only the sender's ID and deny task execution. Add that ID to the config,
+then restart the bot.
+
+```bash
+token-saver telegram
+```
+
+Supported private-chat commands:
+
+- `/projects` lists configured aliases without exposing filesystem paths.
+- `/use <alias>` selects a project.
+- `/ask <task>` runs a general task.
+- `/code <task>` runs a coding task using the configured verification command.
+
+Telegram users cannot provide arbitrary workspace paths or shell verification commands. Group chats are
+rejected, and only explicitly allowed numeric user IDs may execute tasks.
+
 ## Development
 
 ```bash
