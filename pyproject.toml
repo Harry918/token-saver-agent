@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "token-saver-agent"
+version = "0.1.0"
+description = "Local-first agent router using Headroom, llama.cpp, and Codex"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Token Saver Agent contributors"}]
+keywords = ["agents", "codex", "llama.cpp", "local-llm", "headroom"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.optional-dependencies]
+headroom = ["headroom-ai>=0.1"]
+codex = ["openai-codex>=0.1.0b1"]
+all = ["headroom-ai>=0.1", "openai-codex>=0.1.0b1"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+token-saver = "token_saver.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Harry918/token-saver-agent"
+Issues = "https://github.com/Harry918/token-saver-agent/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

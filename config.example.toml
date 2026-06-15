@@ -1,0 +1,13 @@
+version = 1
+workspace_roots = ["/absolute/path/to/your/projects"]
+
+[models]
+local_url = "http://127.0.0.1:8080/v1"
+local_model = "yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:Q4_K_M"
+codex_model = "gpt-5.5"
+codex_mini_model = "gpt-5.4-mini"
+
+[runtime]
+max_local_attempts = 2
+headroom_enabled = true
+request_timeout = 180
